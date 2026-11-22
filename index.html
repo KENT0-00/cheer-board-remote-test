@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>iPhone・iPad 直接通信テスト</title>
+<style>
+*{box-sizing:border-box}body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;margin:0;padding:20px;background:#f3f5f8;color:#17202a}
+main{max-width:680px;margin:auto;background:white;border-radius:18px;padding:20px;box-shadow:0 4px 20px #0001}
+h1{font-size:23px;margin:0 0 8px}p{line-height:1.6}.note{background:#fff6dc;padding:12px;border-radius:10px;font-size:14px}
+label{display:block;font-weight:650;margin:16px 0 6px}textarea,input{width:100%;font:14px ui-monospace,monospace;padding:12px;border:1px solid #bbc4ce;border-radius:10px}
+textarea{min-height:115px;resize:vertical}button{border:0;border-radius:10px;padding:13px 16px;font-size:16px;font-weight:650;background:#1769d2;color:white;margin:8px 6px 8px 0}
+button.secondary{background:#596575}button:disabled{opacity:.45}
+#status{padding:12px;border-radius:10px;background:#e9eef5;font-weight:650;margin:14px 0}
+#received{font-size:25px;min-height:70px;padding:16px;background:#101820;color:#fff;border-radius:12px;white-space:pre-wrap;overflow-wrap:anywhere}
+#log{font-size:13px;color:#596575;white-space:pre-wrap}
+</style>
+</head>
+<body><main>
+<h1>端末間・直接通信テスト</h1>
+<p>同じHTMLファイルをiPhoneとiPadの両方で開いてください。通信はWebRTCのデータ通信を使い、外部の中継サーバーやSTUNサーバーを設定していません。</p>
+<div class="note">接続には最初だけ「接続情報」のコピー＆貼り付けが必要です。接続情報の交換自体は手動なので、インターネット不要です。まずiPhoneを「送信側」、iPadを「受信側」にしてください。</div>
+<label for="role">この端末の役割</label>
+<select id="role" style="width:100%;padding:12px;border-radius:10px;font-size:16px">
+<option value="offer">送信側（iPhone）</option><option value="answer">受信側（iPad）</option>
+</select>
+<div id="offerPanel">
+<label>① 送信側：接続情報を作成</label>
+<button id="makeOffer">接続情報を作る</button>
+<textarea id="local" placeholder="作成した接続情報がここに表示されます"></textarea>
+<button class="secondary" id="copyLocal">接続情報をコピー</button>
+</div>
+<div id="answerPanel" hidden>
+<label>① 受信側：iPhoneから受け取った接続情報を貼り付け</label>
+<textarea id="remoteOffer" placeholder="iPhoneでコピーした接続情報を貼り付け"></textarea>
+<button id="makeAnswer">回答情報を作る</button>
+<label>② この回答情報をiPhoneに渡す</label>
+<textarea id="localAnswer" placeholder="回答情報がここに表示されます"></textarea>
+<button class="secondary" id="copyAnswer">回答情報をコピー</button>
+</div>
+<div id="finishPanel" hidden>
+<label>③ 送信側：iPadの回答情報を貼り付け</label>
+<textarea id="remoteAnswer" placeholder="iPadでコピーした回答情報を貼り付け"></textarea>
+<button id="applyAnswer">回答情報を適用</button>
+</div>
+<div id="status">未接続</div>
+<label>メッセージ送信</label>
+<input id="message" placeholder="iPhoneから送る文字" value="テスト成功！">
+<button id="send" disabled>メッセージを送る</button>
+<label>受信したメッセージ</label>
+<div id="received">まだ受信していません</div>
+<div id="log"></div>
+</main>
+<script>
+(() => {
+const $=id=>document.getElementById(id);
+let pc=null,dc=null;
+const log=s=>$('log').textContent=s;
+const status=s=>$('status').textContent=s;
+const setConnected=()=>{status('接続済み');$('send').disabled=!(dc&&dc.readyState==='open')};
+function newPeer(){
+ if(pc)pc.close();
+ pc=new RTCPeerConnection({iceServers:[]});
+ pc.onconnectionstatechange=()=>{status('接続状態：'+pc.connectionState); if(pc.connectionState==='connected')setConnected()};
+ pc.ondatachannel=e=>{dc=e.channel;wireChannel()};
+ pc.oniceconnectionstatechange=()=>{if(pc.iceConnectionState==='failed')status('接続失敗：このWi-Fi環境では端末間通信が制限されている可能性があります')};
+ return pc;
+}
+function wireChannel(){
+ dc.onopen=()=>{setConnected();log('データ通信が開きました。')};
+ dc.onclose=()=>{status('切断されました');$('send').disabled=true};
+ dc.onmessage=e=>{$('received').textContent=e.data};
+}
+function waitIce(p){
+ return new Promise(resolve=>{
+  if(p.iceGatheringState==='complete')return resolve();
+  const timeout=setTimeout(resolve,12000);
+  p.addEventListener('icegatheringstatechange',function f(){
+   if(p.iceGatheringState==='complete'){clearTimeout(timeout);p.removeEventListener('icegatheringstatechange',f);resolve()}
+  });
+ });
+}
+$('role').onchange=()=>{
+ const isOffer=$('role').value==='offer';
+ $('offerPanel').hidden=!isOffer;$('answerPanel').hidden=isOffer;$('finishPanel').hidden=!isOffer;
+};
+$('makeOffer').onclick=async()=>{
+ try{
+  const p=newPeer();dc=p.createDataChannel('cheer-test');wireChannel();
+  const offer=await p.createOffer();await p.setLocalDescription(offer);status('接続情報を準備中…');
+  await waitIce(p);$('local').value=JSON.stringify(p.localDescription);$('finishPanel').hidden=false;status('接続情報を作成しました。iPadへコピーしてください。');
+ }catch(e){status('エラー：'+e.message)}
+};
+$('makeAnswer').onclick=async()=>{
+ try{
+  const p=newPeer();const offer=JSON.parse($('remoteOffer').value);await p.setRemoteDescription(offer);
+  const answer=await p.createAnswer();await p.setLocalDescription(answer);status('回答情報を準備中…');
+  await waitIce(p);$('localAnswer').value=JSON.stringify(p.localDescription);status('回答情報を作成しました。iPhoneへコピーしてください。');
+ }catch(e){status('エラー：接続情報を確認してください。'+e.message)}
+};
+$('applyAnswer').onclick=async()=>{
+ try{await pc.setRemoteDescription(JSON.parse($('remoteAnswer').value));status('回答情報を適用しました。接続を待っています…')}
+ catch(e){status('エラー：回答情報を確認してください。'+e.message)}
+};
+$('copyLocal').onclick=async()=>{try{await navigator.clipboard.writeText($('local').value);status('コピーしました。iPadに貼り付けてください。')}catch(e){$('local').select();status('文章を選択しました。長押ししてコピーしてください。')}};
+$('copyAnswer').onclick=async()=>{try{await navigator.clipboard.writeText($('localAnswer').value);status('コピーしました。iPhoneに貼り付けてください。')}catch(e){$('localAnswer').select();status('文章を選択しました。長押ししてコピーしてください。')}};
+$('send').onclick=()=>{if(dc&&dc.readyState==='open')dc.send($('message').value)};
+})();
+</script></body></html>
