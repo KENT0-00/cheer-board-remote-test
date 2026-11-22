@@ -99,7 +99,7 @@ body.role-display #previewPanel{margin-top:6px}
 <div><label for="blinkRate">点滅間隔</label><select id="blinkRate"><option value="0.5">0.5秒（最速）</option><option value="0.75">0.75秒</option><option value="1" selected>1.0秒</option><option value="1.25">1.25秒</option><option value="1.5">1.5秒</option><option value="2">2.0秒</option></select></div>
 <div><label for="font">フォント</label><select id="font"><option value="sans">ゴシック</option><option value="rounded">丸ゴシック</option><option value="serif">明朝</option><option value="mono">等幅</option></select></div>
 </div>
-<p class="hint">スクロール速度は数字が大きいほど速くなります。速度設定1は100px/s、設定10は200px/sです。表示中も速度を変更できます。スクロール後の点滅への切り替えは0.2秒です。</p>
+<p class="hint">スクロール速度は数字が大きいほど速くなります。速度設定1は100px/s、設定10は500px/sです。表示中も速度を変更できます。スクロール後の点滅への切り替えは0.2秒です。</p>
 </section>
 <section class="panel">
 <h2>色設定</h2>
@@ -171,7 +171,7 @@ function beginScroll(id){
    const deltaSeconds=Math.min((now-lastFrameTime)/1000,0.05);
    lastFrameTime=now;
 
-   const speed=100+(Number($('speed').value)-1)*(300/9);
+   const speed=100+(Number($('speed').value)-1)*(400/9);
    traveled+=speed*deltaSeconds;
 
    if(traveled>=distance){
