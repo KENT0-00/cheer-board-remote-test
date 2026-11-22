@@ -1,0 +1,287 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#111111">
+<title>応援ボード 自動接続テスト</title>
+<style>
+:root{color-scheme:dark}
+*{box-sizing:border-box}
+body{margin:0 auto;padding:22px 16px 40px;max-width:620px;background:#111;color:#f5f5f5;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+h1{font-size:1.35rem;margin:8px 0 10px}
+h2{font-size:1.08rem;margin:0 0 12px}
+p{line-height:1.65;color:#ccc}
+.panel{background:#202020;border:1px solid #444;border-radius:14px;padding:18px;margin:16px 0}
+button,input{font:inherit;border-radius:10px;padding:13px;border:1px solid #666}
+button{display:block;width:100%;margin:10px 0 0;background:#16865b;color:white;font-weight:700}
+button:disabled{opacity:.45}
+input{width:100%;background:#090909;color:white;text-align:center;font-size:1.5rem;letter-spacing:.18em}
+#code{font-size:2.3rem;letter-spacing:.2em;font-weight:800;text-align:center;padding:12px 0}
+#status{white-space:pre-wrap;color:#9de2bd;min-height:3em;line-height:1.6}
+.small{font-size:.88rem;color:#aaa}
+.warning{color:#f1c27d}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<h1>応援ボード 自動接続テスト</h1>
+<p>iPhoneをリモコン、iPadを表示側として接続するテストページです。両方の端末でこのページを開いてください。</p>
+
+<section class="panel">
+  <h2>iPhone（リモコン）</h2>
+  <button id="startPhone">接続コードを発行</button>
+  <div id="code">------</div>
+  <p class="small">表示された6桁の番号をiPadに入力してください。</p>
+</section>
+
+<section class="panel">
+  <h2>iPad（表示側）</h2>
+  <input id="joinCode" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="6桁のコード">
+  <button id="joinPad">コードで接続</button>
+</section>
+
+<section class="panel">
+  <h2>接続状態</h2>
+  <div id="status">未接続</div>
+  <div id="testArea" hidden>
+    <p>接続できました！テストメッセージを送れます。</p>
+    <button id="sendTest">iPhoneからテストメッセージを送る</button>
+    <div id="received" class="small"></div>
+  </div>
+  <button id="reset" type="button">最初からやり直す</button>
+</section>
+
+<p class="small">最初の接続情報の交換にはSupabase Realtime（インターネット接続）が必要です。接続後のメッセージはWebRTCデータチャネルで端末間に直接送ります。STUN/TURNサーバーは使わない設定です。そのため、iPhoneのインターネット共有環境などで端末間の直接接続ができない場合は接続できません。</p>
+<p class="small warning">このテスト版は動作確認用です。6桁コードは一時的な合言葉であり、強固な認証ではありません。知らない人にコードを見せず、個人情報や機密情報を送らないでください。</p>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+"use strict";
+
+// この2項目は今回作成したSupabaseプロジェクトの接続情報です。
+// Publishable keyはブラウザで使う公開用キーです。Secret keyは絶対に入れないでください。
+const SUPABASE_URL = "https://ldkcqjpzmvrtrezydfnl.supabase.co";
+const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_n1AR9itkS1zrraSRnQHoSQ_GRQ3Ovx-";
+
+const $ = id => document.getElementById(id);
+const status = message => $("status").textContent = message;
+const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+
+let pc = null;
+let dataChannel = null;
+let signalChannel = null;
+let activeRole = null;
+let activeRoom = null;
+let handledOffer = false;
+let handledAnswer = false;
+let busy = false;
+
+function makeCode() {
+  return String(Math.floor(100000 + Math.random() * 900000));
+}
+
+function getPresences() {
+  if (!signalChannel) return [];
+  return Object.values(signalChannel.presenceState()).flat();
+}
+
+function isFresh(item) {
+  return Number.isFinite(item.sentAt) && Date.now() - item.sentAt < 120000;
+}
+
+function attachDataChannel(channel) {
+  dataChannel = channel;
+  dataChannel.onopen = () => {
+    status("接続完了！iPhoneとiPadが直接つながりました。");
+    $("testArea").hidden = false;
+  };
+  dataChannel.onmessage = event => {
+    $("received").textContent = "受信：" + String(event.data);
+  };
+  dataChannel.onclose = () => status("データチャネルが切断されました。");
+  dataChannel.onerror = () => status("データチャネルでエラーが発生しました。");
+}
+
+function createPeer() {
+  pc = new RTCPeerConnection({ iceServers: [] });
+  pc.onconnectionstatechange = () => {
+    if (!pc) return;
+    const state = pc.connectionState;
+    if (state === "connecting") status("端末同士を接続しています…");
+    if (state === "connected") {
+      status("WebRTC接続完了。端末間で直接通信しています。");
+      $("testArea").hidden = false;
+    }
+    if (state === "failed") {
+      status("接続に失敗しました。現在のネットワークで端末間の直接接続ができない可能性があります。最初からやり直して再試行してください。");
+    }
+    if (state === "disconnected") status("接続が一時的に切れました。");
+  };
+  pc.ondatachannel = event => attachDataChannel(event.channel);
+  return pc;
+}
+
+function waitForIceGathering(peer) {
+  if (peer.iceGatheringState === "complete") return Promise.resolve();
+  return new Promise(resolve => {
+    const timeout = setTimeout(done, 12000);
+    function done() {
+      clearTimeout(timeout);
+      peer.removeEventListener("icegatheringstatechange", check);
+      resolve();
+    }
+    function check() {
+      if (peer.iceGatheringState === "complete") done();
+    }
+    peer.addEventListener("icegatheringstatechange", check);
+  });
+}
+
+async function openSignalChannel(code, role) {
+  activeRoom = code;
+  activeRole = role;
+  const presenceKey = role + "-" + Math.random().toString(36).slice(2);
+  signalChannel = supabaseClient.channel("cheer-pair-" + code, {
+    config: { presence: { key: presenceKey } }
+  });
+
+  // subscribe前にイベントを登録し、初回のpresence同期を取りこぼさないようにする
+  signalChannel.on("presence", { event: "sync" }, () => {
+    handlePresenceUpdate().catch(error => status("接続処理エラー：" + error.message));
+  });
+
+  await new Promise((resolve, reject) => {
+    signalChannel.subscribe(state => {
+      if (state === "SUBSCRIBED") resolve();
+      if (state === "CHANNEL_ERROR" || state === "TIMED_OUT") {
+        reject(new Error("Supabase Realtimeに接続できませんでした（" + state + "）。"));
+      }
+    });
+  });
+}
+
+async function handlePresenceUpdate() {
+  if (!signalChannel || !pc) return;
+  const peers = getPresences();
+
+  if (activeRole === "pad" && !handledOffer) {
+    const phone = peers.find(item =>
+      item.role === "phone" && item.room === activeRoom &&
+      item.offer && isFresh(item)
+    );
+    if (!phone) return;
+
+    handledOffer = true;
+    await pc.setRemoteDescription(phone.offer);
+    const answer = await pc.createAnswer();
+    await pc.setLocalDescription(answer);
+    await waitForIceGathering(pc);
+    await signalChannel.track({
+      role: "pad",
+      room: activeRoom,
+      answer: pc.localDescription,
+      sentAt: Date.now()
+    });
+    status("iPhoneへ応答を送りました。接続中…");
+  }
+
+  if (activeRole === "phone" && !handledAnswer) {
+    const pad = peers.find(item =>
+      item.role === "pad" && item.room === activeRoom &&
+      item.answer && isFresh(item)
+    );
+    if (!pad) return;
+
+    handledAnswer = true;
+    await pc.setRemoteDescription(pad.answer);
+    status("iPadの応答を受信しました。接続中…");
+  }
+}
+
+async function startPhone() {
+  if (busy) return;
+  busy = true;
+  $("startPhone").disabled = true;
+  try {
+    const code = makeCode();
+    $("code").textContent = code;
+    status("接続準備中…");
+    await openSignalChannel(code, "phone");
+
+    createPeer();
+    attachDataChannel(pc.createDataChannel("cheer-board-control"));
+
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+    await waitForIceGathering(pc);
+
+    await signalChannel.track({
+      role: "phone",
+      room: activeRoom,
+      offer: pc.localDescription,
+      sentAt: Date.now()
+    });
+    status("コードを発行しました。iPadに6桁のコードを入力してください。");
+  } catch (error) {
+    status("エラー：" + error.message);
+    $("startPhone").disabled = false;
+    busy = false;
+  }
+}
+
+async function joinPad() {
+  if (busy) return;
+  const code = $("joinCode").value.replace(/\D/g, "");
+  if (!/^\d{6}$/.test(code)) {
+    status("6桁の数字を入力してください。");
+    return;
+  }
+
+  busy = true;
+  $("joinPad").disabled = true;
+  try {
+    status("iPhoneを探しています…");
+    await openSignalChannel(code, "pad");
+    createPeer();
+    status("iPhoneの接続情報を待っています…");
+    // 先にiPhoneが待機していた場合も初回同期を確認
+    await handlePresenceUpdate();
+  } catch (error) {
+    status("エラー：" + error.message);
+    $("joinPad").disabled = false;
+    busy = false;
+  }
+}
+
+$("startPhone").addEventListener("click", startPhone);
+$("joinPad").addEventListener("click", joinPad);
+$("sendTest").addEventListener("click", () => {
+  if (dataChannel && dataChannel.readyState === "open") {
+    dataChannel.send("iPhoneからのテストメッセージ");
+  } else {
+    status("まだ接続されていません。");
+  }
+});
+$("reset").addEventListener("click", async () => {
+  try { if (signalChannel) await supabaseClient.removeChannel(signalChannel); } catch (_) {}
+  try { if (pc) pc.close(); } catch (_) {}
+  signalChannel = null;
+  pc = null;
+  dataChannel = null;
+  activeRole = null;
+  activeRoom = null;
+  handledOffer = false;
+  handledAnswer = false;
+  busy = false;
+  $("code").textContent = "------";
+  $("joinCode").value = "";
+  $("received").textContent = "";
+  $("testArea").hidden = true;
+  $("startPhone").disabled = false;
+  $("joinPad").disabled = false;
+  status("未接続");
+});
+</script>
+</body>
+</html>
