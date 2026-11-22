@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#111111">
-<title>応援ボード</title>
+<title>応援ボード（リモコン対応・速度即時変更版）</title>
 <style>
 :root{color-scheme:dark;--bg:#111;--panel:#202020;--text:#fff;--accent:#3688ff}
 *{box-sizing:border-box}
@@ -23,7 +23,7 @@ button.secondary{background:#555}button.danger{background:#8e3434}button:disable
 .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
 .hint{font-size:.82rem;color:#aaa;line-height:1.5;margin:7px 0}
 #preview{position:relative;width:100%;height:min(48vh,360px);min-height:220px;background:#000;border:1px solid #555;border-radius:12px;overflow:hidden;display:flex;align-items:center;justify-content:center}
-#message{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);font-weight:900;font-size:clamp(34px,8vw,76px);line-height:1.2;white-space:pre;text-align:center;color:#fff;paint-order:stroke fill;pointer-events:none;will-change:transform,opacity;max-width:none}
+#message{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);font-weight:900;font-size:clamp(34px,8vw,76px);line-height:1.2;white-space:pre;text-align:center;color:#fff;pointer-events:none;will-change:transform,opacity;max-width:none}
 #preview.full{position:fixed;inset:0;width:100vw;height:100dvh;max-height:none;min-height:0;border:0;border-radius:0;z-index:1000}
 #preview.full #message{font-size:clamp(42px,10vw,120px)}
 #fullExit{display:none;position:fixed;z-index:1001;right:12px;top:12px;background:#333c;border:1px solid #aaa}
@@ -100,19 +100,15 @@ body.role-display #previewPanel{margin-top:6px}
 <div><label for="blinkDuration">点滅継続時間</label><select id="blinkDuration"><option>1</option><option>2</option><option>3</option><option selected>5</option><option>6</option><option>7</option><option>8</option><option>9</option><option>10</option></select></div>
 <div><label for="font">フォント</label><select id="font"><option value="sans">ゴシック</option><option value="rounded">丸ゴシック</option><option value="serif">明朝</option><option value="mono">等幅</option></select></div>
 </div>
-<p class="hint">スクロール速度は数字が大きいほど速くなります。スクロール後の点滅への切り替えは0.2秒です。</p>
+<p class="hint">スクロール速度は数字が大きいほど速くなります。表示中も速度を変更できます。スクロール後の点滅への切り替えは0.2秒です。</p>
 </section>
 <section class="panel">
-<h2>色・縁取り</h2>
+<h2>色設定</h2>
 <div class="grid">
 <div><label for="textColor">文字色</label><select id="textColor"></select></div>
 <div><label for="backgroundColor">背景色</label><select id="backgroundColor"></select></div>
-<div><label for="innerColor">内側の縁取り色</label><select id="innerColor"></select></div>
-<div><label for="outerColor">外側の縁取り色</label><select id="outerColor"></select></div>
-<div><label for="innerWidth">内側の縁取り太さ</label><select id="innerWidth"><option value="0">なし</option><option value="1">1</option><option value="2" selected>2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="8">8</option></select></div>
-<div><label for="outerWidth">外側の縁取り太さ</label><select id="outerWidth"><option value="0">なし</option><option value="1">1</option><option value="2">2</option><option value="3" selected>3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="8">8</option><option value="10">10</option></select></div>
 </div>
-<p class="hint">色は原色8色から選べます。</p>
+<p class="hint">文字色・背景色は原色8色から選べます。</p>
 </section>
 </main>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -121,8 +117,8 @@ body.role-display #previewPanel{margin-top:6px}
 'use strict';
 const $=id=>document.getElementById(id);
 const colors=[['赤','#ff0000'],['青','#0000ff'],['黄','#ffff00'],['緑','#00ff00'],['水色','#00ffff'],['紫','#ff00ff'],['白','#ffffff'],['黒','#000000']];
-['textColor','backgroundColor','innerColor','outerColor'].forEach(id=>{const s=$(id);colors.forEach(([name,value])=>{const o=document.createElement('option');o.value=value;o.textContent=name;s.append(o)})});
-$('textColor').value='#ffffff';$('backgroundColor').value='#000000';$('innerColor').value='#ff0000';$('outerColor').value='#ffff00';
+['textColor','backgroundColor'].forEach(id=>{const s=$(id);colors.forEach(([name,value])=>{const o=document.createElement('option');o.value=value;o.textContent=name;s.append(o)})});
+$('textColor').value='#ffffff';$('backgroundColor').value='#000000';
 const preview=$('preview'),msg=$('message'),input=$('messageInput');
 let running=false,runId=0,raf=0,timers=[];
 const STORAGE='cheerBoardSavedMessagesV1';
@@ -133,9 +129,6 @@ function setText(text){msg.textContent=text;msg.style.whiteSpace='pre';msg.style
 function applyStyle(){
  const font={sans:'Arial, "Hiragino Kaku Gothic ProN", Meiryo, sans-serif',rounded:'"Arial Rounded MT Bold", "Hiragino Maru Gothic ProN", Meiryo, sans-serif',serif:'"Yu Mincho", "Hiragino Mincho ProN", serif',mono:'monospace'};
  msg.style.fontFamily=font[$('font').value];msg.style.color=$('textColor').value;preview.style.background=$('backgroundColor').value;
- const iw=+$('innerWidth').value,ow=+$('outerWidth').value,ic=$('innerColor').value,oc=$('outerColor').value;
- const shadows=[];if(iw)shadows.push(`0 0 0 ${iw}px ${ic}`);if(ow)shadows.push(`0 0 0 ${iw+ow}px ${oc}`);
- msg.style.webkitTextStroke='0px transparent';msg.style.textShadow=shadows.join(',');
 }
 function currentText(){return input.value||' '}
 function blinkLoop(id){
@@ -145,10 +138,43 @@ function blinkLoop(id){
 }
 function beginScroll(id){
  if(!running||id!==runId)return;
- const original=currentText();const oneLine=original.replace(/\r?\n/g,'　');setText(oneLine);msg.style.whiteSpace='pre';msg.style.left='0';msg.style.transform='translate(0,-50%)';msg.style.opacity='1';
- const box=preview.getBoundingClientRect();const width=msg.getBoundingClientRect().width;const distance=box.width+width;const speed=10+(+$('speed').value-1)*(10/9);const duration=distance/speed*1000;
- const start=performance.now();status('スクロール中');
- function frame(now){if(!running||id!==runId)return;const p=Math.min(1,(now-start)/duration);const x=box.width-p*distance;msg.style.transform=`translate(${x}px,-50%)`;if(p<1)raf=requestAnimationFrame(frame);else if($('mode').value==='scrollBlink')enterBlink(id);else{status('スクロール完了');running=false}}
+ const original=currentText();
+ const oneLine=original.replace(/\r?\n/g,'　');
+ setText(oneLine);
+ msg.style.whiteSpace='pre';
+ msg.style.left='0';
+ msg.style.transform='translate(0,-50%)';
+ msg.style.opacity='1';
+
+ const box=preview.getBoundingClientRect();
+ const width=msg.getBoundingClientRect().width;
+ const distance=box.width+width;
+ let traveled=0;
+ let lastFrameTime=0;
+ status('スクロール中');
+
+ function frame(now){
+   if(!running||id!==runId)return;
+   if(!lastFrameTime)lastFrameTime=now;
+   const deltaSeconds=Math.min((now-lastFrameTime)/1000,0.05);
+   lastFrameTime=now;
+
+   // Read the current setting every frame so remote speed changes take effect immediately.
+   const speed=10+(Number($('speed').value)-1)*(10/9);
+   traveled+=speed*deltaSeconds;
+
+   const x=box.width-traveled;
+   msg.style.transform=`translate(${x}px,-50%)`;
+
+   if(traveled<distance){
+     raf=requestAnimationFrame(frame);
+   }else if($('mode').value==='scrollBlink'){
+     enterBlink(id);
+   }else{
+     status('スクロール完了');
+     running=false;
+   }
+ }
  raf=requestAnimationFrame(frame);
 }
 function enterBlink(id){if(!running||id!==runId)return;msg.style.transition='transform 200ms ease, opacity 200ms ease';setText(currentText());msg.style.opacity='1';requestAnimationFrame(()=>{if(!running||id!==runId)return;msg.style.transform='translate(-50%,-50%)';});timers.push(setTimeout(()=>{if(!running||id!==runId)return;msg.style.transition='none';blinkLoop(id)},220))}
@@ -160,7 +186,7 @@ function start(){stop();running=true;const id=runId;applyStyle();const mode=$('m
 $('start').onclick=start;$('stop').onclick=stop;$('fullscreen').onclick=async()=>{try{if(!document.fullscreenElement)await preview.requestFullscreen();else await document.exitFullscreen()}catch(e){status('全画面表示に対応していない可能性があります')}};
 $('fullExit').onclick=()=>{if(document.fullscreenElement)document.exitFullscreen()};
 document.addEventListener('fullscreenchange',()=>preview.classList.toggle('full',!!document.fullscreenElement));
-['textColor','backgroundColor','innerColor','outerColor','innerWidth','outerWidth','font'].forEach(id=>$(id).addEventListener('change',()=>{applyStyle();if(!running)setText(currentText())}));
+['textColor','backgroundColor','font'].forEach(id=>$(id).addEventListener('change',()=>{applyStyle();if(!running)setText(currentText())}));
 input.addEventListener('input',()=>{if(!running){setText(currentText());applyStyle()}});
 $('mode').addEventListener('change',()=>{if(running)start()});
 function readSaved(){try{return JSON.parse(localStorage.getItem(STORAGE)||'[]')}catch{return []}}
@@ -192,9 +218,7 @@ function getBoardState(){
     message:input.value, mode:$('mode').value, speed:$('speed').value,
     blinkRate:$('blinkRate').value, blinkDuration:$('blinkDuration').value,
     font:$('font').value, textColor:$('textColor').value,
-    backgroundColor:$('backgroundColor').value, innerColor:$('innerColor').value,
-    outerColor:$('outerColor').value, innerWidth:$('innerWidth').value,
-    outerWidth:$('outerWidth').value
+    backgroundColor:$('backgroundColor').value
   };
 }
 function applyBoardState(s){
@@ -202,7 +226,7 @@ function applyBoardState(s){
   remoteApplying=true;
   try{
     input.value=String(s.message??'');
-    ['mode','speed','blinkRate','blinkDuration','font','textColor','backgroundColor','innerColor','outerColor','innerWidth','outerWidth'].forEach(k=>{
+    ['mode','speed','blinkRate','blinkDuration','font','textColor','backgroundColor'].forEach(k=>{
       if(s[k]!==undefined && $(k)) $(k).value=String(s[k]);
     });
     applyStyle();
@@ -351,7 +375,7 @@ $('connectReset').addEventListener('click',()=>{
 setRole('controller');
 
 // iPhone側の設定変更をiPadへ同期する。
-const syncFields=['messageInput','mode','speed','blinkRate','blinkDuration','font','textColor','backgroundColor','innerColor','outerColor','innerWidth','outerWidth'];
+const syncFields=['messageInput','mode','speed','blinkRate','blinkDuration','font','textColor','backgroundColor'];
 syncFields.forEach(id=>{
   const el=$(id);
   el.addEventListener(id==='messageInput'?'input':'change',()=>sendCurrentState('update'));
@@ -364,3 +388,4 @@ $('stop').addEventListener('click',()=>setTimeout(()=>sendCurrentState('stop'),0
 </script>
 </body>
 </html>
+
