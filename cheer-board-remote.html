@@ -100,7 +100,7 @@ body.role-display #previewPanel{margin-top:6px}
 <div><label for="blinkDuration">点滅継続時間</label><select id="blinkDuration"><option>1</option><option>2</option><option>3</option><option selected>5</option><option>6</option><option>7</option><option>8</option><option>9</option><option>10</option></select></div>
 <div><label for="font">フォント</label><select id="font"><option value="sans">ゴシック</option><option value="rounded">丸ゴシック</option><option value="serif">明朝</option><option value="mono">等幅</option></select></div>
 </div>
-<p class="hint">スクロール速度は数字が大きいほど速くなります。表示中も速度を変更できます。スクロール後の点滅への切り替えは0.2秒です。</p>
+<p class="hint">スクロール速度は数字が大きいほど速くなります。速度設定1は100px/s、設定10は200px/sです。表示中も速度を変更できます。スクロール後の点滅への切り替えは0.2秒です。</p>
 </section>
 <section class="panel">
 <h2>色設定</h2>
@@ -160,7 +160,7 @@ function beginScroll(id){
    lastFrameTime=now;
 
    // Read the current setting every frame so remote speed changes take effect immediately.
-   const speed=10+(Number($('speed').value)-1)*(10/9);
+   const speed=100+(Number($('speed').value)-1)*(100/9);
    traveled+=speed*deltaSeconds;
 
    const x=box.width-traveled;
@@ -388,4 +388,3 @@ $('stop').addEventListener('click',()=>setTimeout(()=>sendCurrentState('stop'),0
 </script>
 </body>
 </html>
-
