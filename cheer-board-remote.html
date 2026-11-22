@@ -99,7 +99,7 @@ body.role-display #previewPanel{margin-top:6px}
 <div><label for="blinkRate">点滅間隔</label><select id="blinkRate"><option value="0.5">0.5秒（最速）</option><option value="0.75">0.75秒</option><option value="1" selected>1.0秒</option><option value="1.25">1.25秒</option><option value="1.5">1.5秒</option><option value="2">2.0秒</option></select></div>
 <div><label for="font">フォント</label><select id="font"><option value="sans">ゴシック</option><option value="rounded">丸ゴシック</option><option value="serif">明朝</option><option value="mono">等幅</option></select></div>
 </div>
-<p class="hint">スクロール速度は数字が大きいほど速くなります。速度設定1は100px/s、設定10は500px/sです。表示中も速度を変更できます。スクロール後の点滅への切り替えは0.2秒です。</p>
+<p class="hint">スクロール速度は数字が大きいほど速くなります。速度設定1は100px/s、設定10は500px/sです。表示中も速度を変更できます。スクロール後に中央で3回点滅し、再びスクロールします。切り替えは0.2秒です。</p>
 </section>
 <section class="panel">
 <h2>色設定</h2>
@@ -130,8 +130,9 @@ function applyStyle(){
  msg.style.fontFamily=font[$('font').value];msg.style.color=$('textColor').value;preview.style.background=$('backgroundColor').value;
 }
 function currentText(){return input.value||' '}
-function blinkLoop(id){
+function blinkLoop(id, returnToScroll=false){
  let visible=true;
+ let completedBlinks=0;
  let nextTimer=null;
  status('点滅表示中');
 
@@ -140,7 +141,19 @@ function blinkLoop(id){
    visible=!visible;
    msg.style.opacity=visible?'1':'0';
 
-   // Read the current blink interval each cycle so a remote change is picked up.
+   // スクロール→点滅モードでは、3回点滅したら次のスクロールへ。
+   if(returnToScroll && !visible){
+     completedBlinks++;
+     if(completedBlinks>=3){
+       msg.style.opacity='1';
+       timers.push(setTimeout(()=>{
+         if(!running||id!==runId)return;
+         beginScroll(id);
+       },100));
+       return;
+     }
+   }
+
    const halfInterval=(Number($('blinkRate').value)*1000)/2;
    nextTimer=setTimeout(tick,halfInterval);
    timers.push(nextTimer);
@@ -154,6 +167,7 @@ function beginScroll(id){
 
  const oneLine=currentText().replace(/\r?\n/g,'　');
  setText(oneLine);
+ msg.style.transition='none';
  msg.style.whiteSpace='pre';
  msg.style.left='0';
  msg.style.opacity='1';
@@ -175,7 +189,24 @@ function beginScroll(id){
    traveled+=speed*deltaSeconds;
 
    if(traveled>=distance){
-     // Start the next pass from the right edge, without ending the run.
+     if($('mode').value==='scrollBlink'){
+       // スクロール終了後、中央へ戻してから点滅に移る。
+       msg.style.transition='opacity 200ms ease';
+       msg.style.opacity='0';
+       setText(currentText());
+       msg.style.opacity='0';
+       requestAnimationFrame(()=>{
+         if(!running||id!==runId)return;
+         msg.style.opacity='1';
+       });
+       timers.push(setTimeout(()=>{
+         if(!running||id!==runId)return;
+         msg.style.transition='none';
+         blinkLoop(id,true);
+       },220));
+       return;
+     }
+     // スクロールのみは右端から繰り返す。
      traveled=0;
    }
 
@@ -185,10 +216,9 @@ function beginScroll(id){
  }
  raf=requestAnimationFrame(frame);
 }
-function enterBlink(id){if(!running||id!==runId)return;msg.style.transition='transform 200ms ease, opacity 200ms ease';setText(currentText());msg.style.opacity='1';requestAnimationFrame(()=>{if(!running||id!==runId)return;msg.style.transform='translate(-50%,-50%)';});timers.push(setTimeout(()=>{if(!running||id!==runId)return;msg.style.transition='none';blinkLoop(id)},220))}
 function start(){stop();running=true;const id=runId;applyStyle();const mode=$('mode').value;msg.style.transition='none';msg.style.visibility='visible';msg.style.opacity='1';
  if(mode==='fixed'){setText(currentText());status('固定表示中')}
- else if(mode==='blink'){setText(currentText());blinkLoop(id)}
+ else if(mode==='blink'){setText(currentText());blinkLoop(id,false)}
  else beginScroll(id);
 }
 $('start').onclick=start;$('stop').onclick=stop;$('fullscreen').onclick=async()=>{try{if(!document.fullscreenElement)await preview.requestFullscreen();else await document.exitFullscreen()}catch(e){status('全画面表示に対応していない可能性があります')}};
