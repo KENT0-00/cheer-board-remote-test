@@ -66,7 +66,7 @@ body.role-display #previewPanel{margin-top:6px}
     <input id="joinCode" inputmode="numeric" maxlength="6" placeholder="例：123456">
   </div>
   <div id="connectionStatus" class="status">未接続</div>
-  <p class="hint">最初の接続・ペアリングにはインターネット通信を使います。接続後の操作データは、可能な場合は端末間で直接送信します。ネットワーク環境によっては接続できないことがあります。</p>
+  <p class="hint">最初の接続・ペアリングと接続先の確認にインターネット通信を使います。操作データは端末間での直接送信を試みます。ネットワーク環境によっては直接接続できないことがあります。</p>
 </section>
 <section class="panel" id="previewPanel">
 <h2>表示プレビュー</h2>
@@ -233,7 +233,12 @@ async function ensureSupabase(){
   return sb;
 }
 function makePeer(){
-  peer=new RTCPeerConnection({iceServers:[]});
+  peer=new RTCPeerConnection({
+    iceServers:[
+      {urls:'stun:stun.l.google.com:19302'},
+      {urls:'stun:stun1.l.google.com:19302'}
+    ]
+  });
   peer.onconnectionstatechange=()=>{
     if(!peer)return;
     if(peer.connectionState==='connected') connStatus('端末間の直接接続が完了しました');
