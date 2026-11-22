@@ -1,0 +1,361 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#111111">
+<title>応援ボード</title>
+<style>
+:root{color-scheme:dark;--bg:#111;--panel:#202020;--text:#fff;--accent:#3688ff}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:#f5f5f5;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+main{max-width:900px;margin:auto;padding:18px 14px 40px}
+h1{font-size:1.45rem;margin:4px 0 16px}
+h2{font-size:1.05rem;margin:0 0 12px}
+.panel{background:var(--panel);border:1px solid #444;border-radius:14px;padding:16px;margin:14px 0}
+label{display:block;font-size:.92rem;margin:12px 0 6px;color:#ddd}
+textarea,input,select,button{font:inherit;border-radius:9px}
+textarea,input,select{width:100%;padding:11px;background:#101010;color:#fff;border:1px solid #555}
+textarea{min-height:88px;resize:vertical}
+button{border:0;padding:12px 15px;background:#2677df;color:#fff;font-weight:700;cursor:pointer}
+button.secondary{background:#555}button.danger{background:#8e3434}button:disabled{opacity:.45}
+.row{display:flex;gap:8px;flex-wrap:wrap}.row>*{flex:1;min-width:110px}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.hint{font-size:.82rem;color:#aaa;line-height:1.5;margin:7px 0}
+#preview{position:relative;width:100%;height:min(48vh,360px);min-height:220px;background:#000;border:1px solid #555;border-radius:12px;overflow:hidden;display:flex;align-items:center;justify-content:center}
+#message{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);font-weight:900;font-size:clamp(34px,8vw,76px);line-height:1.2;white-space:pre;text-align:center;color:#fff;paint-order:stroke fill;pointer-events:none;will-change:transform,opacity;max-width:none}
+#preview.full{position:fixed;inset:0;width:100vw;height:100dvh;max-height:none;min-height:0;border:0;border-radius:0;z-index:1000}
+#preview.full #message{font-size:clamp(42px,10vw,120px)}
+#fullExit{display:none;position:fixed;z-index:1001;right:12px;top:12px;background:#333c;border:1px solid #aaa}
+#preview.full~#fullExit{display:block}
+.status{font-size:.85rem;color:#aaa;min-height:1.3em;margin-top:8px}
+.pair-code{font-size:2.3rem;font-weight:900;letter-spacing:.22em;text-align:center;padding:12px;background:#101010;border:1px solid #555;border-radius:10px}
+body.role-controller #previewPanel{display:none}
+body.role-display main>section.panel:not(#remotePanel):not(#previewPanel){display:none}
+body.role-display #remotePanel h2,body.role-display #deviceRole,body.role-display label[for="deviceRole"],body.role-display #connectStart,body.role-display #connectReset,body.role-display #joinCodeArea,body.role-display #pairCodeArea,body.role-display #remotePanel p{display:none}
+body.role-display #remotePanel{padding:10px 14px;margin:6px 0}
+body.role-display #remotePanel #connectionStatus{margin:0}
+body.role-display main{padding-top:6px}
+body.role-display h1{display:none}
+body.role-display #preview{height:78vh;min-height:300px}
+body.role-display #previewPanel{margin-top:6px}
+
+@media(max-width:520px){.grid{grid-template-columns:1fr}#preview{height:38vh;min-height:190px}}
+</style>
+</head>
+<body>
+<main>
+<h1>応援ボード</h1>
+<section class="panel" id="remotePanel">
+  <h2>iPhoneリモコン接続</h2>
+  <label for="deviceRole">この端末の役割</label>
+  <select id="deviceRole">
+    <option value="controller">iPhone（リモコン）</option>
+    <option value="display">iPad（表示画面）</option>
+  </select>
+  <div class="row" style="margin-top:10px">
+    <button id="connectStart">接続を開始</button>
+    <button id="connectReset" class="secondary">接続をリセット</button>
+  </div>
+  <div id="pairCodeArea" style="display:none">
+    <p class="hint">iPad側で同じページを開き、下の6桁コードを入力してください。</p>
+    <div id="pairCode" class="pair-code">------</div>
+  </div>
+  <div id="joinCodeArea" style="display:none">
+    <label for="joinCode">iPhoneに表示された6桁コード</label>
+    <input id="joinCode" inputmode="numeric" maxlength="6" placeholder="例：123456">
+  </div>
+  <div id="connectionStatus" class="status">未接続</div>
+  <p class="hint">最初の接続・ペアリングにはインターネット通信を使います。接続後の操作データは、可能な場合は端末間で直接送信します。ネットワーク環境によっては接続できないことがあります。</p>
+</section>
+<section class="panel" id="previewPanel">
+<h2>表示プレビュー</h2>
+<div id="preview"><div id="message">応援してるよ！</div></div>
+<button id="fullExit" type="button">全画面を終了</button>
+<div class="row" style="margin-top:10px">
+<button id="start">表示開始</button><button id="stop" class="secondary">停止</button><button id="fullscreen" class="secondary">全画面表示</button>
+</div>
+<div id="status" class="status">待機中</div>
+</section>
+<section class="panel">
+<h2>メッセージ</h2>
+<label for="messageInput">表示する言葉（改行できます）</label>
+<textarea id="messageInput">応援してるよ！</textarea>
+<div class="row"><button id="save" class="secondary">この言葉を保存</button><button id="clear" class="secondary">入力をクリア</button></div>
+<label for="saved">保存した言葉</label>
+<div class="row"><select id="saved"><option value="">保存した言葉を選択</option></select><button id="load" class="secondary">呼び出す</button><button id="remove" class="danger">削除</button></div>
+</section>
+<section class="panel">
+<h2>表示設定</h2>
+<label for="mode">表示方法</label>
+<select id="mode">
+<option value="scrollBlink">スクロール → 点滅（ループ）</option>
+<option value="fixed">固定表示</option>
+<option value="scroll">スクロールのみ</option>
+<option value="blink">点滅のみ</option>
+</select>
+<div class="grid">
+<div><label for="speed">スクロール速度</label><select id="speed"><option value="1">1（ゆっくり）</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5" selected>5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option><option value="9">9</option><option value="10">10（最速）</option></select></div>
+<div><label for="blinkRate">点滅間隔</label><select id="blinkRate"><option value="0.5">0.5秒（最速）</option><option value="0.75">0.75秒</option><option value="1" selected>1.0秒</option><option value="1.25">1.25秒</option><option value="1.5">1.5秒</option><option value="2">2.0秒</option></select></div>
+<div><label for="blinkDuration">点滅継続時間</label><select id="blinkDuration"><option>1</option><option>2</option><option>3</option><option selected>5</option><option>6</option><option>7</option><option>8</option><option>9</option><option>10</option></select></div>
+<div><label for="font">フォント</label><select id="font"><option value="sans">ゴシック</option><option value="rounded">丸ゴシック</option><option value="serif">明朝</option><option value="mono">等幅</option></select></div>
+</div>
+<p class="hint">スクロール速度は数字が大きいほど速くなります。スクロール後の点滅への切り替えは0.2秒です。</p>
+</section>
+<section class="panel">
+<h2>色・縁取り</h2>
+<div class="grid">
+<div><label for="textColor">文字色</label><select id="textColor"></select></div>
+<div><label for="backgroundColor">背景色</label><select id="backgroundColor"></select></div>
+<div><label for="innerColor">内側の縁取り色</label><select id="innerColor"></select></div>
+<div><label for="outerColor">外側の縁取り色</label><select id="outerColor"></select></div>
+<div><label for="innerWidth">内側の縁取り太さ</label><select id="innerWidth"><option value="0">なし</option><option value="1">1</option><option value="2" selected>2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="8">8</option></select></div>
+<div><label for="outerWidth">外側の縁取り太さ</label><select id="outerWidth"><option value="0">なし</option><option value="1">1</option><option value="2">2</option><option value="3" selected>3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="8">8</option><option value="10">10</option></select></div>
+</div>
+<p class="hint">色は原色8色から選べます。</p>
+</section>
+</main>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+(()=>{
+'use strict';
+const $=id=>document.getElementById(id);
+const colors=[['赤','#ff0000'],['青','#0000ff'],['黄','#ffff00'],['緑','#00ff00'],['水色','#00ffff'],['紫','#ff00ff'],['白','#ffffff'],['黒','#000000']];
+['textColor','backgroundColor','innerColor','outerColor'].forEach(id=>{const s=$(id);colors.forEach(([name,value])=>{const o=document.createElement('option');o.value=value;o.textContent=name;s.append(o)})});
+$('textColor').value='#ffffff';$('backgroundColor').value='#000000';$('innerColor').value='#ff0000';$('outerColor').value='#ffff00';
+const preview=$('preview'),msg=$('message'),input=$('messageInput');
+let running=false,runId=0,raf=0,timers=[];
+const STORAGE='cheerBoardSavedMessagesV1';
+function status(s){$('status').textContent=s}
+function clearTimers(){timers.forEach(clearTimeout);timers=[];if(raf)cancelAnimationFrame(raf);raf=0}
+function stop(){running=false;runId++;clearTimers();msg.style.transition='none';msg.style.opacity='1';msg.style.visibility='visible';msg.style.transform='translate(-50%,-50%)';status('停止しました')}
+function setText(text){msg.textContent=text;msg.style.whiteSpace='pre';msg.style.width='max-content';msg.style.left='50%';msg.style.top='50%';msg.style.transform='translate(-50%,-50%)'}
+function applyStyle(){
+ const font={sans:'Arial, "Hiragino Kaku Gothic ProN", Meiryo, sans-serif',rounded:'"Arial Rounded MT Bold", "Hiragino Maru Gothic ProN", Meiryo, sans-serif',serif:'"Yu Mincho", "Hiragino Mincho ProN", serif',mono:'monospace'};
+ msg.style.fontFamily=font[$('font').value];msg.style.color=$('textColor').value;preview.style.background=$('backgroundColor').value;
+ const iw=+$('innerWidth').value,ow=+$('outerWidth').value,ic=$('innerColor').value,oc=$('outerColor').value;
+ const shadows=[];if(iw)shadows.push(`0 0 0 ${iw}px ${ic}`);if(ow)shadows.push(`0 0 0 ${iw+ow}px ${oc}`);
+ msg.style.webkitTextStroke='0px transparent';msg.style.textShadow=shadows.join(',');
+}
+function currentText(){return input.value||' '}
+function blinkLoop(id){
+ const rate=+$('blinkRate').value*1000,duration=+$('blinkDuration').value*1000,start=performance.now();let on=true;
+ function tick(){if(!running||id!==runId)return;const elapsed=performance.now()-start;if(elapsed>=duration){msg.style.opacity='1';if($('mode').value==='scrollBlink')beginScroll(id);else status('表示中');return}on=!on;msg.style.opacity=on?'1':'0';timers.push(setTimeout(tick,rate/2))}
+ status('点滅表示中');timers.push(setTimeout(tick,rate/2));
+}
+function beginScroll(id){
+ if(!running||id!==runId)return;
+ const original=currentText();const oneLine=original.replace(/\r?\n/g,'　');setText(oneLine);msg.style.whiteSpace='pre';msg.style.left='0';msg.style.transform='translate(0,-50%)';msg.style.opacity='1';
+ const box=preview.getBoundingClientRect();const width=msg.getBoundingClientRect().width;const distance=box.width+width;const speed=10+(+$('speed').value-1)*(10/9);const duration=distance/speed*1000;
+ const start=performance.now();status('スクロール中');
+ function frame(now){if(!running||id!==runId)return;const p=Math.min(1,(now-start)/duration);const x=box.width-p*distance;msg.style.transform=`translate(${x}px,-50%)`;if(p<1)raf=requestAnimationFrame(frame);else if($('mode').value==='scrollBlink')enterBlink(id);else{status('スクロール完了');running=false}}
+ raf=requestAnimationFrame(frame);
+}
+function enterBlink(id){if(!running||id!==runId)return;msg.style.transition='transform 200ms ease, opacity 200ms ease';setText(currentText());msg.style.opacity='1';requestAnimationFrame(()=>{if(!running||id!==runId)return;msg.style.transform='translate(-50%,-50%)';});timers.push(setTimeout(()=>{if(!running||id!==runId)return;msg.style.transition='none';blinkLoop(id)},220))}
+function start(){stop();running=true;const id=runId;applyStyle();const mode=$('mode').value;msg.style.transition='none';msg.style.visibility='visible';msg.style.opacity='1';
+ if(mode==='fixed'){setText(currentText());status('固定表示中')}
+ else if(mode==='blink'){setText(currentText());blinkLoop(id)}
+ else beginScroll(id);
+}
+$('start').onclick=start;$('stop').onclick=stop;$('fullscreen').onclick=async()=>{try{if(!document.fullscreenElement)await preview.requestFullscreen();else await document.exitFullscreen()}catch(e){status('全画面表示に対応していない可能性があります')}};
+$('fullExit').onclick=()=>{if(document.fullscreenElement)document.exitFullscreen()};
+document.addEventListener('fullscreenchange',()=>preview.classList.toggle('full',!!document.fullscreenElement));
+['textColor','backgroundColor','innerColor','outerColor','innerWidth','outerWidth','font'].forEach(id=>$(id).addEventListener('change',()=>{applyStyle();if(!running)setText(currentText())}));
+input.addEventListener('input',()=>{if(!running){setText(currentText());applyStyle()}});
+$('mode').addEventListener('change',()=>{if(running)start()});
+function readSaved(){try{return JSON.parse(localStorage.getItem(STORAGE)||'[]')}catch{return []}}
+function refreshSaved(selected=''){const list=$('saved');list.innerHTML='<option value="">保存した言葉を選択</option>';readSaved().forEach((v,i)=>{const o=document.createElement('option');o.value=String(i);o.textContent=v.replace(/\n/g,' / ').slice(0,50)||'(空欄)';list.append(o)});if(selected!==''&&list.options[Number(selected)+1])list.value=selected}
+$('save').onclick=()=>{const a=readSaved();a.push(input.value);localStorage.setItem(STORAGE,JSON.stringify(a));refreshSaved(String(a.length-1));status('言葉を保存しました')};
+$('load').onclick=()=>{const i=$('saved').value;if(i==='')return;input.value=readSaved()[Number(i)]??'';if(!running){setText(currentText());applyStyle()}status('保存した言葉を呼び出しました')};
+$('remove').onclick=()=>{const i=$('saved').value;if(i==='')return;const a=readSaved();a.splice(Number(i),1);localStorage.setItem(STORAGE,JSON.stringify(a));refreshSaved();status('保存した言葉を削除しました')};
+$('clear').onclick=()=>{input.value='';if(!running)setText(' ')};
+refreshSaved();applyStyle();setText(currentText());
+
+// --- iPhoneリモコン / iPad表示 接続機能 ---
+const SUPABASE_URL='https://ldkcqjpzmvrtrezydfnl.supabase.co';
+const SUPABASE_KEY='sb_publishable_n1AR9itkS1zrraSRnQHoSQ_GRQ3Ovx-';
+let sb=null, pairChannel=null, peer=null, dataChannel=null, deviceRole='controller';
+let activeCode='', offerSent=false, remoteApplying=false;
+
+function connStatus(s){$('connectionStatus').textContent=s}
+function setRole(role){
+  deviceRole=role;
+  document.body.classList.toggle('role-controller',role==='controller');
+  document.body.classList.toggle('role-display',role==='display');
+  $('pairCodeArea').style.display=role==='controller'?'block':'none';
+  $('joinCodeArea').style.display=role==='display'?'block':'none';
+  $('connectStart').textContent=role==='controller'?'接続コードを発行':'コードで接続';
+  connStatus('未接続');
+}
+function getBoardState(){
+  return {
+    message:input.value, mode:$('mode').value, speed:$('speed').value,
+    blinkRate:$('blinkRate').value, blinkDuration:$('blinkDuration').value,
+    font:$('font').value, textColor:$('textColor').value,
+    backgroundColor:$('backgroundColor').value, innerColor:$('innerColor').value,
+    outerColor:$('outerColor').value, innerWidth:$('innerWidth').value,
+    outerWidth:$('outerWidth').value
+  };
+}
+function applyBoardState(s){
+  if(!s || typeof s!=='object') return;
+  remoteApplying=true;
+  try{
+    input.value=String(s.message??'');
+    ['mode','speed','blinkRate','blinkDuration','font','textColor','backgroundColor','innerColor','outerColor','innerWidth','outerWidth'].forEach(k=>{
+      if(s[k]!==undefined && $(k)) $(k).value=String(s[k]);
+    });
+    applyStyle();
+    if(!running) setText(currentText());
+  } finally { remoteApplying=false; }
+}
+function sendPacket(packet){
+  if(dataChannel && dataChannel.readyState==='open'){
+    try{dataChannel.send(JSON.stringify(packet));return true}catch(e){}
+  }
+  return false;
+}
+function sendCurrentState(action='update'){
+  if(deviceRole!=='controller' || remoteApplying) return;
+  const ok=sendPacket({type:'board',action,state:getBoardState()});
+  if(!ok && activeCode) connStatus('接続待機中（操作は接続後に反映されます）');
+}
+function closeConnection(){
+  if(dataChannel){try{dataChannel.close()}catch(e){} dataChannel=null}
+  if(peer){try{peer.close()}catch(e){} peer=null}
+  if(pairChannel){try{pairChannel.unsubscribe()}catch(e){} pairChannel=null}
+  activeCode='';offerSent=false;
+}
+async function ensureSupabase(){
+  if(sb) return sb;
+  if(!window.supabase || !window.supabase.createClient) throw new Error('接続ライブラリを読み込めません。ページを再読み込みしてください。');
+  sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+  return sb;
+}
+function makePeer(){
+  peer=new RTCPeerConnection({iceServers:[]});
+  peer.onconnectionstatechange=()=>{
+    if(!peer)return;
+    if(peer.connectionState==='connected') connStatus('端末間の直接接続が完了しました');
+    else if(peer.connectionState==='failed') connStatus('接続に失敗しました。両端末で接続をリセットして再試行してください');
+    else if(peer.connectionState==='disconnected') connStatus('通信が一時的に切断されました');
+  };
+  peer.ondatachannel=e=>attachDataChannel(e.channel);
+  if(deviceRole==='controller') attachDataChannel(peer.createDataChannel('board'));
+  return peer;
+}
+function attachDataChannel(ch){
+  dataChannel=ch;
+  ch.onopen=()=>{
+    connStatus('接続完了！iPhoneから操作できます');
+    if(deviceRole==='controller') sendCurrentState('update');
+  };
+  ch.onclose=()=>connStatus('端末間の接続が終了しました');
+  ch.onerror=()=>connStatus('データ通信でエラーが発生しました');
+  ch.onmessage=e=>{
+    if(deviceRole!=='display') return;
+    try{
+      const packet=JSON.parse(e.data);
+      if(packet.type!=='board') return;
+      applyBoardState(packet.state);
+      if(packet.action==='start') start();
+      else if(packet.action==='stop') stop();
+    }catch(err){connStatus('受信データを読み取れませんでした')}
+  };
+}
+function waitIceGathering(p){
+  if(p.iceGatheringState==='complete') return Promise.resolve();
+  return new Promise(resolve=>{
+    const timer=setTimeout(resolve,7000);
+    p.addEventListener('icegatheringstatechange',()=>{
+      if(p.iceGatheringState==='complete'){clearTimeout(timer);resolve()}
+    });
+  });
+}
+async function broadcastSignal(type,description){
+  if(!pairChannel) return;
+  await pairChannel.send({type:'broadcast',event:'signal',payload:{type,description}});
+}
+async function beginOffer(){
+  if(offerSent || !peer || !pairChannel) return;
+  offerSent=true;
+  try{
+    const offer=await peer.createOffer();
+    await peer.setLocalDescription(offer);
+    await waitIceGathering(peer);
+    await broadcastSignal('offer',peer.localDescription);
+    connStatus('iPadからの応答を待っています…');
+  }catch(e){offerSent=false;connStatus('接続準備に失敗しました: '+e.message)}
+}
+async function handleSignal(payload){
+  if(!payload || !payload.type) return;
+  try{
+    if(deviceRole==='display' && payload.type==='offer'){
+      if(!peer) makePeer();
+      await peer.setRemoteDescription(payload.description);
+      const answer=await peer.createAnswer();
+      await peer.setLocalDescription(answer);
+      await waitIceGathering(peer);
+      await broadcastSignal('answer',peer.localDescription);
+      connStatus('iPhoneへの応答を送信しました。接続中…');
+    } else if(deviceRole==='controller' && payload.type==='answer' && peer){
+      await peer.setRemoteDescription(payload.description);
+      connStatus('iPadの応答を受信しました。接続中…');
+    }
+  }catch(e){connStatus('接続処理でエラーが発生しました: '+e.message)}
+}
+async function startPairing(){
+  closeConnection();
+  await ensureSupabase();
+  if(deviceRole==='controller'){
+    activeCode=String(Math.floor(100000+Math.random()*900000));
+    $('pairCode').textContent=activeCode;
+  }else{
+    activeCode=$('joinCode').value.replace(/\D/g,'').slice(0,6);
+    if(activeCode.length!==6) throw new Error('6桁のコードを入力してください');
+  }
+  const channelName='cheer-pair-'+activeCode;
+  pairChannel=sb.channel(channelName,{config:{broadcast:{self:false},presence:{key:deviceRole+'-'+Math.random().toString(36).slice(2)}}});
+  pairChannel.on('broadcast',{event:'signal'},({payload})=>handleSignal(payload));
+  pairChannel.on('broadcast',{event:'ready'},()=>{
+    if(deviceRole==='controller') beginOffer();
+  });
+  pairChannel.subscribe(async status=>{
+    if(status==='SUBSCRIBED'){
+      if(deviceRole==='controller'){
+        connStatus('コード発行中。iPadで入力してください');
+      }else{
+        connStatus('iPhoneを探しています…');
+        await pairChannel.send({type:'broadcast',event:'ready',payload:{ready:true}});
+      }
+    }else if(status==='CHANNEL_ERROR' || status==='TIMED_OUT'){
+      connStatus('接続サービスに接続できませんでした。通信環境を確認してください');
+    }
+  });
+  if(deviceRole==='controller') makePeer();
+}
+$('deviceRole').addEventListener('change',e=>setRole(e.target.value));
+$('connectStart').addEventListener('click',async()=>{
+  $('connectStart').disabled=true;
+  try{await startPairing()}catch(e){connStatus(e.message||'接続を開始できませんでした')}
+  finally{$('connectStart').disabled=false}
+});
+$('connectReset').addEventListener('click',()=>{
+  closeConnection();connStatus('接続をリセットしました');
+});
+setRole('controller');
+
+// iPhone側の設定変更をiPadへ同期する。
+const syncFields=['messageInput','mode','speed','blinkRate','blinkDuration','font','textColor','backgroundColor','innerColor','outerColor','innerWidth','outerWidth'];
+syncFields.forEach(id=>{
+  const el=$(id);
+  el.addEventListener(id==='messageInput'?'input':'change',()=>sendCurrentState('update'));
+});
+$('start').addEventListener('click',()=>setTimeout(()=>sendCurrentState('start'),0));
+$('stop').addEventListener('click',()=>setTimeout(()=>sendCurrentState('stop'),0));
+['save','load','remove','clear'].forEach(id=>$(id).addEventListener('click',()=>setTimeout(()=>sendCurrentState('update'),0)));
+
+})();
+</script>
+</body>
+</html>
