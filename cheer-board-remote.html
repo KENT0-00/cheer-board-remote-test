@@ -97,10 +97,9 @@ body.role-display #previewPanel{margin-top:6px}
 <div class="grid">
 <div><label for="speed">スクロール速度</label><select id="speed"><option value="1">1（ゆっくり）</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5" selected>5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option><option value="9">9</option><option value="10">10（最速）</option></select></div>
 <div><label for="blinkRate">点滅間隔</label><select id="blinkRate"><option value="0.5">0.5秒（最速）</option><option value="0.75">0.75秒</option><option value="1" selected>1.0秒</option><option value="1.25">1.25秒</option><option value="1.5">1.5秒</option><option value="2">2.0秒</option></select></div>
-<div><label for="blinkDuration">点滅継続時間</label><select id="blinkDuration"><option>1</option><option>2</option><option>3</option><option selected>5</option><option>6</option><option>7</option><option>8</option><option>9</option><option>10</option></select></div>
 <div><label for="font">フォント</label><select id="font"><option value="sans">ゴシック</option><option value="rounded">丸ゴシック</option><option value="serif">明朝</option><option value="mono">等幅</option></select></div>
 </div>
-<p class="hint">スクロールのみ・点滅のみも停止ボタンを押すまで繰り返します。スクロール速度は数字が大きいほど速くなります。速度設定1は100px/s、設定10は200px/sです。表示中も速度を変更できます。スクロール後の点滅への切り替えは0.2秒です。</p>
+<p class="hint">スクロール速度は数字が大きいほど速くなります。速度設定1は100px/s、設定10は200px/sです。表示中も速度を変更できます。スクロール後の点滅への切り替えは0.2秒です。</p>
 </section>
 <section class="panel">
 <h2>色設定</h2>
@@ -132,31 +131,31 @@ function applyStyle(){
 }
 function currentText(){return input.value||' '}
 function blinkLoop(id){
- const rate=+$('blinkRate').value*1000,duration=+$('blinkDuration').value*1000,start=performance.now();let on=true;
+ let visible=true;
+ let nextTimer=null;
+ status('点滅表示中');
+
  function tick(){
    if(!running||id!==runId)return;
-   const elapsed=performance.now()-start;
-   if(elapsed>=duration){
-     msg.style.opacity='1';
-     if($('mode').value==='scrollBlink')beginScroll(id);
-     else if($('mode').value==='blink')blinkLoop(id);
-     return;
-   }
-   on=!on;
-   msg.style.opacity=on?'1':'0';
-   timers.push(setTimeout(tick,rate/2));
+   visible=!visible;
+   msg.style.opacity=visible?'1':'0';
+
+   // Read the current blink interval each cycle so a remote change is picked up.
+   const halfInterval=(Number($('blinkRate').value)*1000)/2;
+   nextTimer=setTimeout(tick,halfInterval);
+   timers.push(nextTimer);
  }
- status('点滅表示中');
- timers.push(setTimeout(tick,rate/2));
+ const halfInterval=(Number($('blinkRate').value)*1000)/2;
+ nextTimer=setTimeout(tick,halfInterval);
+ timers.push(nextTimer);
 }
 function beginScroll(id){
  if(!running||id!==runId)return;
- const original=currentText();
- const oneLine=original.replace(/\r?\n/g,'　');
+
+ const oneLine=currentText().replace(/\r?\n/g,'　');
  setText(oneLine);
  msg.style.whiteSpace='pre';
  msg.style.left='0';
- msg.style.transform='translate(0,-50%)';
  msg.style.opacity='1';
 
  const box=preview.getBoundingClientRect();
@@ -172,21 +171,17 @@ function beginScroll(id){
    const deltaSeconds=Math.min((now-lastFrameTime)/1000,0.05);
    lastFrameTime=now;
 
-   // Read the current setting every frame so remote speed changes take effect immediately.
-   const speed=100+(Number($('speed').value)-1)*(100/9);
+   const speed=100+(Number($('speed').value)-1)*(300/9);
    traveled+=speed*deltaSeconds;
+
+   if(traveled>=distance){
+     // Start the next pass from the right edge, without ending the run.
+     traveled=0;
+   }
 
    const x=box.width-traveled;
    msg.style.transform=`translate(${x}px,-50%)`;
-
-   if(traveled<distance){
-     raf=requestAnimationFrame(frame);
-   }else if($('mode').value==='scrollBlink'){
-     enterBlink(id);
-   }else{
-     // Scroll-only mode repeats from the beginning until the user presses Stop.
-     beginScroll(id);
-   }
+   raf=requestAnimationFrame(frame);
  }
  raf=requestAnimationFrame(frame);
 }
@@ -229,7 +224,7 @@ function setRole(role){
 function getBoardState(){
   return {
     message:input.value, mode:$('mode').value, speed:$('speed').value,
-    blinkRate:$('blinkRate').value, blinkDuration:$('blinkDuration').value,
+    blinkRate:$('blinkRate').value,
     font:$('font').value, textColor:$('textColor').value,
     backgroundColor:$('backgroundColor').value
   };
@@ -239,7 +234,7 @@ function applyBoardState(s){
   remoteApplying=true;
   try{
     input.value=String(s.message??'');
-    ['mode','speed','blinkRate','blinkDuration','font','textColor','backgroundColor'].forEach(k=>{
+    ['mode','speed','blinkRate','font','textColor','backgroundColor'].forEach(k=>{
       if(s[k]!==undefined && $(k)) $(k).value=String(s[k]);
     });
     applyStyle();
@@ -388,7 +383,7 @@ $('connectReset').addEventListener('click',()=>{
 setRole('controller');
 
 // iPhone側の設定変更をiPadへ同期する。
-const syncFields=['messageInput','mode','speed','blinkRate','blinkDuration','font','textColor','backgroundColor'];
+const syncFields=['messageInput','mode','speed','blinkRate','font','textColor','backgroundColor'];
 syncFields.forEach(id=>{
   const el=$(id);
   el.addEventListener(id==='messageInput'?'input':'change',()=>sendCurrentState('update'));
