@@ -31,6 +31,7 @@ button.secondary{background:#555}button.danger{background:#8e3434}button:disable
 .status{font-size:.85rem;color:#aaa;min-height:1.3em;margin-top:8px}
 .pair-code{font-size:2.3rem;font-weight:900;letter-spacing:.22em;text-align:center;padding:12px;background:#101010;border:1px solid #555;border-radius:10px}
 body.role-controller #previewPanel{display:none}
+body.role-display #remoteControlButtons{display:none}
 body.role-display main>section.panel:not(#remotePanel):not(#previewPanel){display:none}
 body.role-display #remotePanel h2,body.role-display #deviceRole,body.role-display label[for="deviceRole"],body.role-display #connectReset,body.role-display #pairCodeArea,body.role-display #remotePanel p{display:none}
 body.role-display #remotePanel{padding:10px 14px;margin:6px 0}
@@ -64,6 +65,9 @@ body.role-display #previewPanel{margin-top:6px}
   <div id="joinCodeArea" style="display:none">
     <label for="joinCode">iPhoneに表示された6桁コード</label>
     <input id="joinCode" inputmode="numeric" maxlength="6" placeholder="例：123456">
+  </div>
+  <div class="row" id="remoteControlButtons" style="margin-top:10px">
+    <button id="remoteStop" class="danger" type="button">表示停止</button>
   </div>
   <div id="connectionStatus" class="status">未接続</div>
   <p class="hint">最初の接続・ペアリングと接続先の確認にインターネット通信を使います。操作データは端末間での直接送信を試みます。ネットワーク環境によっては直接接続できないことがあります。</p>
@@ -99,7 +103,7 @@ body.role-display #previewPanel{margin-top:6px}
 <div><label for="blinkRate">点滅間隔</label><select id="blinkRate"><option value="0.5">0.5秒（最速）</option><option value="0.75">0.75秒</option><option value="1" selected>1.0秒</option><option value="1.25">1.25秒</option><option value="1.5">1.5秒</option><option value="2">2.0秒</option></select></div>
 <div><label for="font">フォント</label><select id="font"><option value="sans">ゴシック</option><option value="rounded">丸ゴシック</option><option value="serif">明朝</option><option value="mono">等幅</option></select></div>
 </div>
-<p class="hint">スクロール速度は数字が大きいほど速くなります。速度設定1は100px/s、設定10は500px/sです。表示中も速度を変更できます。スクロール後に中央で3回点滅し、再びスクロールします。切り替えは0.2秒です。</p>
+<p class="hint">スクロール速度は数字が大きいほど速くなります。速度設定1は100px/s、設定10は500px/sです。表示中も速度を変更できます。1回スクロールするごとに中央で3回点滅し、再びスクロールします。</p>
 </section>
 <section class="panel">
 <h2>色設定</h2>
@@ -133,7 +137,6 @@ function currentText(){return input.value||' '}
 function blinkLoop(id, returnToScroll=false){
  let visible=true;
  let completedBlinks=0;
- let nextTimer=null;
  status('点滅表示中');
 
  function tick(){
@@ -141,26 +144,24 @@ function blinkLoop(id, returnToScroll=false){
    visible=!visible;
    msg.style.opacity=visible?'1':'0';
 
-   // スクロール→点滅モードでは、3回点滅したら次のスクロールへ。
-   if(returnToScroll && !visible){
+   // 1回の「消える→点く」を1回として数え、3回で次のスクロールへ。
+   if(returnToScroll && visible){
      completedBlinks++;
      if(completedBlinks>=3){
        msg.style.opacity='1';
        timers.push(setTimeout(()=>{
          if(!running||id!==runId)return;
          beginScroll(id);
-       },100));
+       },120));
        return;
      }
    }
 
    const halfInterval=(Number($('blinkRate').value)*1000)/2;
-   nextTimer=setTimeout(tick,halfInterval);
-   timers.push(nextTimer);
+   timers.push(setTimeout(tick,halfInterval));
  }
  const halfInterval=(Number($('blinkRate').value)*1000)/2;
- nextTimer=setTimeout(tick,halfInterval);
- timers.push(nextTimer);
+ timers.push(setTimeout(tick,halfInterval));
 }
 function beginScroll(id){
  if(!running||id!==runId)return;
@@ -190,20 +191,15 @@ function beginScroll(id){
 
    if(traveled>=distance){
      if($('mode').value==='scrollBlink'){
-       // スクロール終了後、中央へ戻してから点滅に移る。
-       msg.style.transition='opacity 200ms ease';
-       msg.style.opacity='0';
+       // 1回分のスクロールが終わったら、中央に表示して3回点滅。
+       msg.style.transition='none';
        setText(currentText());
-       msg.style.opacity='0';
-       requestAnimationFrame(()=>{
-         if(!running||id!==runId)return;
-         msg.style.opacity='1';
-       });
+       msg.style.opacity='1';
+       msg.style.transform='translate(-50%,-50%)';
        timers.push(setTimeout(()=>{
          if(!running||id!==runId)return;
-         msg.style.transition='none';
          blinkLoop(id,true);
-       },220));
+       },200));
        return;
      }
      // スクロールのみは右端から繰り返す。
@@ -420,6 +416,10 @@ syncFields.forEach(id=>{
 });
 $('start').addEventListener('click',()=>setTimeout(()=>sendCurrentState('start'),0));
 $('stop').addEventListener('click',()=>setTimeout(()=>sendCurrentState('stop'),0));
+$('remoteStop').addEventListener('click',()=>{
+  sendPacket({type:'board',action:'stop',state:getBoardState()});
+  connStatus(dataChannel&&dataChannel.readyState==='open'?'iPadの表示を停止しました':'iPadと未接続です。接続後にもう一度押してください');
+});
 ['save','load','remove','clear'].forEach(id=>$(id).addEventListener('click',()=>setTimeout(()=>sendCurrentState('update'),0)));
 
 })();
