@@ -102,8 +102,25 @@ body.role-display #previewPanel{margin-top:6px}
 <div><label for="speed">スクロール速度</label><select id="speed"><option value="1">1（ゆっくり）</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5" selected>5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option><option value="9">9</option><option value="10">10（最速）</option></select></div>
 <div><label for="blinkRate">点滅間隔</label><select id="blinkRate"><option value="0.5">0.5秒（最速）</option><option value="0.75">0.75秒</option><option value="1" selected>1.0秒</option><option value="1.25">1.25秒</option><option value="1.5">1.5秒</option><option value="2">2.0秒</option></select></div>
 <div><label for="font">フォント</label><select id="font"><option value="sans">ゴシック</option><option value="rounded">丸ゴシック</option><option value="serif">明朝</option><option value="mono">等幅</option></select></div>
+<div><label for="fontSize">文字サイズ</label><select id="fontSize">
+<option value="40">40px（小さめ）</option>
+<option value="50">50px</option>
+<option value="60">60px</option>
+<option value="70">70px</option>
+<option value="80" selected>80px（標準）</option>
+<option value="90">90px</option>
+<option value="100">100px</option>
+<option value="110">110px</option>
+<option value="120">120px</option>
+<option value="130">130px</option>
+<option value="140">140px</option>
+<option value="150">150px</option>
+<option value="160">160px</option>
+<option value="180">180px（大きめ）</option>
+<option value="200">200px（最大）</option>
+</select></div>
 </div>
-<p class="hint">スクロール速度は数字が大きいほど速くなります。速度設定1は100px/s、設定10は500px/sです。表示中も速度を変更できます。1回スクロールするごとに中央で3回点滅し、再びスクロールします。</p>
+<p class="hint">文字サイズは40〜200pxから選べます。スクロール速度は数字が大きいほど速くなります。速度設定1は100px/s、設定10は500px/sです。表示中も速度を変更できます。1回スクロールするごとに中央で3回点滅し、再びスクロールします。</p>
 </section>
 <section class="panel">
 <h2>色設定</h2>
@@ -131,7 +148,7 @@ function stop(){running=false;runId++;clearTimers();msg.style.transition='none';
 function setText(text){msg.textContent=text;msg.style.whiteSpace='pre';msg.style.width='max-content';msg.style.left='50%';msg.style.top='50%';msg.style.transform='translate(-50%,-50%)'}
 function applyStyle(){
  const font={sans:'Arial, "Hiragino Kaku Gothic ProN", Meiryo, sans-serif',rounded:'"Arial Rounded MT Bold", "Hiragino Maru Gothic ProN", Meiryo, sans-serif',serif:'"Yu Mincho", "Hiragino Mincho ProN", serif',mono:'monospace'};
- msg.style.fontFamily=font[$('font').value];msg.style.color=$('textColor').value;preview.style.background=$('backgroundColor').value;
+ msg.style.fontFamily=font[$('font').value];msg.style.fontSize=Number($('fontSize').value)+'px';msg.style.color=$('textColor').value;preview.style.background=$('backgroundColor').value;
 }
 function currentText(){return input.value||' '}
 function blinkLoop(id, returnToScroll=false){
@@ -251,8 +268,8 @@ function getBoardState(){
   return {
     message:input.value, mode:$('mode').value, speed:$('speed').value,
     blinkRate:$('blinkRate').value,
-    font:$('font').value, textColor:$('textColor').value,
-    backgroundColor:$('backgroundColor').value
+    font:$('font').value, fontSize:$('fontSize').value,
+    textColor:$('textColor').value, backgroundColor:$('backgroundColor').value
   };
 }
 function applyBoardState(s){
@@ -260,7 +277,7 @@ function applyBoardState(s){
   remoteApplying=true;
   try{
     input.value=String(s.message??'');
-    ['mode','speed','blinkRate','font','textColor','backgroundColor'].forEach(k=>{
+    ['mode','speed','blinkRate','font','fontSize','textColor','backgroundColor'].forEach(k=>{
       if(s[k]!==undefined && $(k)) $(k).value=String(s[k]);
     });
     applyStyle();
@@ -409,7 +426,7 @@ $('connectReset').addEventListener('click',()=>{
 setRole('controller');
 
 // iPhone側の設定変更をiPadへ同期する。
-const syncFields=['messageInput','mode','speed','blinkRate','font','textColor','backgroundColor'];
+const syncFields=['messageInput','mode','speed','blinkRate','font','fontSize','textColor','backgroundColor'];
 syncFields.forEach(id=>{
   const el=$(id);
   el.addEventListener(id==='messageInput'?'input':'change',()=>sendCurrentState('update'));
