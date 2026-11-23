@@ -67,7 +67,8 @@ body.role-display #previewPanel{margin-top:6px}
     <input id="joinCode" inputmode="numeric" maxlength="6" placeholder="例：123456">
   </div>
   <div class="row" id="remoteControlButtons" style="margin-top:10px">
-    <button id="remoteStop" class="danger" type="button">表示停止</button>
+    <button id="remoteStart" type="button">表示スタート</button>
+    <button id="remoteStop" class="danger" type="button">表示ストップ</button>
   </div>
   <div id="connectionStatus" class="status">未接続</div>
   <p class="hint">最初の接続・ペアリングと接続先の確認にインターネット通信を使います。操作データは端末間での直接送信を試みます。ネットワーク環境によっては直接接続できないことがあります。</p>
@@ -430,6 +431,10 @@ syncFields.forEach(id=>{
 });
 $('start').addEventListener('click',()=>setTimeout(()=>sendCurrentState('start'),0));
 $('stop').addEventListener('click',()=>setTimeout(()=>sendCurrentState('stop'),0));
+$('remoteStart').addEventListener('click',()=>{
+  sendPacket({type:'board',action:'start',state:getBoardState()});
+  connStatus(dataChannel&&dataChannel.readyState==='open'?'iPadの表示を開始しました':'iPadと未接続です。接続後にもう一度押してください');
+});
 $('remoteStop').addEventListener('click',()=>{
   sendPacket({type:'board',action:'stop',state:getBoardState()});
   connStatus(dataChannel&&dataChannel.readyState==='open'?'iPadの表示を停止しました':'iPadと未接続です。接続後にもう一度押してください');
